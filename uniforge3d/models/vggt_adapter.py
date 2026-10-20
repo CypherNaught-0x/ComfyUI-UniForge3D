@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from uniforge3d.models.vggt.models.aggregator import Aggregator
+from ..models.vggt.models.aggregator import Aggregator
 
 FUSION_LAYERS = (4, 7, 11, 14, 17, 20, 23)
 

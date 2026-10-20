@@ -9,8 +9,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from uniforge3d.models.vggt.models.aggregator import slice_expand_and_flatten
-from uniforge3d.models.vggt.models.vggt import VGGT
+from ..models.vggt.models.aggregator import slice_expand_and_flatten
+from ..models.vggt.models.vggt import VGGT
 
 from ..modules.utils import manual_cast
 from .sparse_structure_flow import SparseStructureFlowModel

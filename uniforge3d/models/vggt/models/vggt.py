@@ -8,9 +8,9 @@ import torch
 import torch.nn as nn
 from huggingface_hub import PyTorchModelHubMixin
 
-from uniforge3d.models.vggt.heads.camera_head import CameraHead
-from uniforge3d.models.vggt.heads.dpt_head import DPTHead
-from uniforge3d.models.vggt.models.aggregator import Aggregator
+from ....models.vggt.heads.camera_head import CameraHead
+from ....models.vggt.heads.dpt_head import DPTHead
+from ....models.vggt.models.aggregator import Aggregator
 
 
 class VGGT(nn.Module, PyTorchModelHubMixin):

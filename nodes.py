@@ -199,8 +199,12 @@ class UniForge3DGenerate:
 
         original = pipeline.config
         pipeline.config = config
+        devices = [pipeline.device] if pipeline.device.type == "cuda" else []
         try:
-            mesh = pipeline.generate(batch, seed=int(seed), output=output, progress=progress)
+            # The pipeline seeds the global RNGs; restore them so later nodes in this process
+            # (e.g. Pixal3D) see the same RNG state as if UniForge3D had not run.
+            with torch.random.fork_rng(devices=devices):
+                mesh = pipeline.generate(batch, seed=int(seed), output=output, progress=progress)
         finally:
             pipeline.config = original
         bar.update_absolute(len(STAGE_NAMES) - 1)

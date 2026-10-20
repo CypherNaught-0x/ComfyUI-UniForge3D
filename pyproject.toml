@@ -1,0 +1,13 @@
+[project]
+name = "comfyui-uniforge3d"
+description = "UniForge3D multi-view image-to-3D for ComfyUI, without CUDA-only extensions (runs on AMD ROCm)."
+version = "0.1.0"
+license = { file = "LICENSE" }
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/CypherNaught-0x/ComfyUI-UniForge3D"
+
+[tool.comfy]
+PublisherId = "cyphernaught-0x"
+DisplayName = "ComfyUI-UniForge3D"

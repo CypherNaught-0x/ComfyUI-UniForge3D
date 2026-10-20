@@ -1,0 +1,78 @@
+diff --git a/setup.py b/setup.py
+index 8849b10..3b4148f 100644
+--- a/setup.py
++++ b/setup.py
+@@ -115,10 +115,9 @@ ext_modules = [
+         ],
+         extra_compile_args={
+             "cxx": cxx_flags,
+-            "nvcc": nvcc_flags + [
++            "nvcc": nvcc_flags + ([] if IS_HIP else ["--extended-lambda"]) + [
+                 # The following definitions must be undefined
+                 # since we need half-precision operation.
+-                "--extended-lambda",
+                 "-U__CUDA_NO_HALF_OPERATORS__",
+                 "-U__CUDA_NO_HALF_CONVERSIONS__",
+                 "-U__CUDA_NO_HALF2_OPERATORS__",
+diff --git a/src/clean_up.cu b/src/clean_up.cu
+index a72b1d0..75062fa 100644
+--- a/src/clean_up.cu
++++ b/src/clean_up.cu
+@@ -239,9 +239,17 @@ static __global__ void select_first_in_each_group_kernel(
+ 
+ struct int3_decomposer
+ {
++#ifdef __HIP_PLATFORM_AMD__
++    __host__ __device__ ::rocprim::tuple<int&, int&, int&> operator()(int3& key) const
++#else
+     __host__ __device__ ::cuda::std::tuple<int&, int&, int&> operator()(int3& key) const
++#endif
+     {
++#ifdef __HIP_PLATFORM_AMD__
++        return ::rocprim::tuple<int&, int&, int&>(key.x, key.y, key.z);
++#else
+         return {key.x, key.y, key.z};
++#endif
+     }
+ };
+ 
+diff --git a/src/dtypes.cuh b/src/dtypes.cuh
+index bff560c..e895802 100644
+--- a/src/dtypes.cuh
++++ b/src/dtypes.cuh
+@@ -13,9 +13,9 @@ namespace cumesh {
+ struct __align__(16) Vec3f {
+     float x, y, z;
+ 
+-    __device__ __forceinline__ Vec3f();
+-    __device__ __forceinline__ Vec3f(float x, float y, float z);
+-    __device__ __forceinline__ Vec3f(float3 v);
++    __host__ __device__ __forceinline__ Vec3f();
++    __host__ __device__ __forceinline__ Vec3f(float x, float y, float z);
++    __host__ __device__ __forceinline__ Vec3f(float3 v);
+     __device__ __forceinline__ Vec3f operator+(const Vec3f& o) const;
+     __device__ __forceinline__ Vec3f& operator+=(const Vec3f& o);
+     __device__ __forceinline__ Vec3f operator-(const Vec3f& o) const;
+@@ -55,19 +55,19 @@ struct __align__(16) QEM
+ };
+ 
+ 
+-__device__ __forceinline__ Vec3f::Vec3f() {
++__host__ __device__ __forceinline__ Vec3f::Vec3f() {
+     x = 0.0f;
+     y = 0.0f;
+     z = 0.0f;
+ }
+ 
+-__device__ __forceinline__ Vec3f::Vec3f(float x, float y, float z) {
++__host__ __device__ __forceinline__ Vec3f::Vec3f(float x, float y, float z) {
+     this->x = x;
+     this->y = y;
+     this->z = z;
+ }
+ 
+-__device__ __forceinline__ Vec3f::Vec3f(float3 v) {
++__host__ __device__ __forceinline__ Vec3f::Vec3f(float3 v) {
+     x = v.x;
+     y = v.y;
+     z = v.z;

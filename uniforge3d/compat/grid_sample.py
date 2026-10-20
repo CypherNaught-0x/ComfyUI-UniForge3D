@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import torch
 
+from . import native
 from .comfy_backend import comfy
 
 _CORNERS = torch.tensor(
@@ -36,6 +37,10 @@ def grid_sample_3d(
     """
     if mode not in ("nearest", "trilinear"):
         raise ValueError(f"Unsupported grid_sample_3d mode: {mode}")
+    flex_gemm = native.flex_gemm()
+    if flex_gemm is not None:
+        from flex_gemm.ops.grid_sample import grid_sample_3d as native_grid_sample
+        return native_grid_sample(feats, coords, shape, grid, mode=mode)
     if feats.ndim != 2 or coords.ndim != 2 or coords.shape[1] != 4 or grid.ndim != 3:
         raise ValueError(
             f"Expected feats [N,C], coords [N,4], grid [B,L,3]; got "

@@ -1,6 +1,7 @@
 from typing import Literal
 
 CONV = 'torch'
+CONV_FROM_ENV = False
 DEBUG = False
 ATTN = 'sdpa'
 
@@ -8,6 +9,7 @@ def __from_env():
     import os
     
     global CONV
+    global CONV_FROM_ENV
     global DEBUG
     global ATTN
     
@@ -24,6 +26,7 @@ def __from_env():
         )
     if env_sparse_conv_backend is not None:
         CONV = env_sparse_conv_backend
+        CONV_FROM_ENV = True
     if env_sparse_debug is not None:
         DEBUG = env_sparse_debug == '1'
     if env_sparse_attn_backend is not None and env_sparse_attn_backend in ['xformers', 'flash_attn', 'flash_attn_3', 'sdpa']:

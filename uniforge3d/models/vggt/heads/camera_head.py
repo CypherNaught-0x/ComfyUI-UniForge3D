@@ -11,9 +11,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from uniforge3d.models.vggt.layers import Mlp
-from uniforge3d.models.vggt.layers.block import Block
-from uniforge3d.models.vggt.heads.head_act import activate_pose
+from ....models.vggt.layers import Mlp
+from ....models.vggt.layers.block import Block
+from ....models.vggt.heads.head_act import activate_pose
 
 
 class CameraHead(nn.Module):

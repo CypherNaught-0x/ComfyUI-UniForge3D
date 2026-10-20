@@ -10,10 +10,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Tuple, Union, List, Dict, Any
 
-from uniforge3d.models.vggt.layers import PatchEmbed
-from uniforge3d.models.vggt.layers.block import Block
-from uniforge3d.models.vggt.layers.rope import RotaryPositionEmbedding2D, PositionGetter
-from uniforge3d.models.vggt.layers.vision_transformer import vit_small, vit_base, vit_large, vit_giant2
+from ....models.vggt.layers import PatchEmbed
+from ....models.vggt.layers.block import Block
+from ....models.vggt.layers.rope import RotaryPositionEmbedding2D, PositionGetter
+from ....models.vggt.layers.vision_transformer import vit_small, vit_base, vit_large, vit_giant2
 
 logger = logging.getLogger(__name__)
 
