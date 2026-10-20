@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 import torch
-from easydict import EasyDict as edict
+from ...compat.attrdict import AttrDict as edict
 from tqdm import tqdm
 
 

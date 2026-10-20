@@ -11,13 +11,14 @@ import numpy as np
 import torch
 from PIL import Image
 from torchvision import transforms
-from transformers import AutoModelForImageSegmentation
 
 
 class BackgroundRemover:
 
 
     def __init__(self, checkpoint: str | Path, device: torch.device, **download_kwargs) -> None:
+        from transformers import AutoModelForImageSegmentation
+
         self.device = device
         self.model = AutoModelForImageSegmentation.from_pretrained(
             checkpoint, trust_remote_code=True, **download_kwargs
@@ -119,13 +120,22 @@ def preprocess_view(
         if image.mode != "RGBA" or np.all(np.asarray(image.getchannel("A")) == 255):
             image = remove_background(image.convert("RGB"))
         rgba = np.asarray(image.convert("RGBA"), dtype=np.float32) / 255.0
+    return preprocess_rgba(rgba, config, str(path))
+
+
+def preprocess_rgba(rgba: np.ndarray, config: dict[str, Any], name: str = "view") -> ViewTensors:
+    """Preprocess one float RGBA view in [0, 1] whose alpha is the foreground mask."""
+    alpha_threshold = float(config["alpha_threshold"])
+    rgba = np.asarray(rgba, dtype=np.float32)
+    if rgba.ndim != 3 or rgba.shape[2] != 4:
+        raise ValueError(f"{name}: expected an [H,W,4] RGBA view, got {rgba.shape}")
     alpha = rgba[..., 3]
     mask = alpha > alpha_threshold
     if not np.any(mask):
-        raise ValueError(f"{path}: empty alpha mask")
+        raise ValueError(f"{name}: empty alpha mask")
     # Preserve the trained black-background alpha composite and rounding.
     rgb = (rgba[..., :3] * rgba[..., 3:4] * 255.0).clip(0, 255).astype(np.uint8)
-    crop = alpha_bbox_crop_params(alpha, config["padding_factor"], alpha_threshold, str(path))
+    crop = alpha_bbox_crop_params(alpha, config["padding_factor"], alpha_threshold, name)
     dino_images512 = crop_resize_rgb_np(rgb, crop, 512)
     dino_images1024 = crop_resize_rgb_np(rgb, crop, 1024)
     vggt448 = crop_resize_rgb_np(rgb, crop, 448)
@@ -147,7 +157,12 @@ def build_input_batch(
     remove_background: Callable[[Image.Image], Image.Image],
 ) -> InputBatch:
     paths = [Path(image).expanduser().resolve() for image in images]
-    views = [preprocess_view(path, config, remove_background) for path in paths]
+    return stack_views([preprocess_view(path, config, remove_background) for path in paths])
+
+
+def stack_views(views: Sequence[ViewTensors]) -> InputBatch:
+    if not views:
+        raise ValueError("UniForge3D needs at least one view")
     return InputBatch(
         dino_images512=torch.stack([view.dino_images512 for view in views]).unsqueeze(0),
         dino_images1024=torch.stack([view.dino_images1024 for view in views]).unsqueeze(0),

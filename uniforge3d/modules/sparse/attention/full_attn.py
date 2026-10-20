@@ -6,7 +6,27 @@ from .. import config
 
 __all__ = [
     'sparse_scaled_dot_product_attention',
+    'varlen_sdpa',
 ]
+
+
+def varlen_sdpa(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, q_seqlen, kv_seqlen) -> torch.Tensor:
+    """Variable-length attention as one PyTorch SDPA call per sequence.
+
+    q [T_Q, H, C], k/v [T_KV, H, C]; sequence i uses the i-th slice of each. On ROCm this
+    beats FlashAttention's Triton varlen kernel for UniForge3D's few long sequences.
+    """
+    out = q.new_empty(*q.shape[:2], v.shape[-1])
+    q_start = kv_start = 0
+    for q_len, kv_len in zip(q_seqlen, kv_seqlen):
+        q_len, kv_len = int(q_len), int(kv_len)
+        qi = q[q_start:q_start + q_len].transpose(0, 1)[None]
+        ki = k[kv_start:kv_start + kv_len].transpose(0, 1)[None]
+        vi = v[kv_start:kv_start + kv_len].transpose(0, 1)[None]
+        out[q_start:q_start + q_len] = torch.nn.functional.scaled_dot_product_attention(qi, ki, vi)[0].transpose(0, 1)
+        q_start += q_len
+        kv_start += kv_len
+    return out
 
 
 @overload
@@ -211,6 +231,13 @@ def sparse_scaled_dot_product_attention(*args, **kwargs):
             max_q_seqlen = max(q_seqlen)
             max_kv_seqlen = max(kv_seqlen)
         out = flash_attn_3.flash_attn_varlen_func(q, k, v, cu_seqlens_q, cu_seqlens_kv, max_q_seqlen, max_kv_seqlen)
+    elif config.ATTN == 'sdpa':
+        if num_all_args == 1:
+            q, k, v = qkv.unbind(dim=1)
+            kv_seqlen = q_seqlen
+        elif num_all_args == 2:
+            k, v = kv.unbind(dim=1)
+        out = varlen_sdpa(q, k, v, q_seqlen, kv_seqlen)
     else:
         raise ValueError(f"Unknown attention module: {config.ATTN}")
     

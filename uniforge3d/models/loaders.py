@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from easydict import EasyDict as edict
 from huggingface_hub import hf_hub_download, snapshot_download
 from safetensors.torch import load_file, load_model
+
+from ..compat.attrdict import AttrDict as edict
+from ..compat.lora import merge_peft_state_dict
 
 from . import __getattr__ as get_model_class
 from .conditioning import StructuredLatentConditioner
@@ -32,6 +34,12 @@ def resolve_checkpoint(
     if isinstance(checkpoint, (str, Path)):
         return str(root / Path(checkpoint).expanduser())
     filename = checkpoint["filename"]
+    # Pre-fetched copies laid out as <root>/external/<repo_id>/<filename> avoid any Hub access.
+    local = root / "external" / checkpoint["repo_id"] / filename
+    if decoder and Path(f"{local}.json").is_file() and Path(f"{local}.safetensors").is_file():
+        return str(local)
+    if not decoder and local.is_file():
+        return str(local)
     options = {
         "repo_id": checkpoint["repo_id"],
         "revision": checkpoint.get("revision"),
@@ -137,64 +145,64 @@ def _load_flow_model(spec: edict, weights: dict):
     if spec.name != "VGGTConditionedSLatFlowModel":
         raise ValueError(f"Unsupported flow model: {spec.name}")
     model = VGGTConditionedSLatFlowModel(**spec.args)
-    from peft import LoraConfig, get_peft_model
-
     if "base_checkpoint" in weights:
-        model.denoiser.load_state_dict(_read_weights(weights["base_checkpoint"]), strict=True)
+        raise NotImplementedError("Adapter-only checkpoints over a separate base are not supported")
     model.denoiser.requires_grad_(False)
-    model.denoiser = get_peft_model(model.denoiser, LoraConfig(**weights["lora"]))
-    state = _read_weights(weights["checkpoint"])
-    if "base_checkpoint" in weights:
-        _load_trainable_weights(model.denoiser, state)
-    else:
-        model.denoiser.load_state_dict(state, strict=True)
+    # PEFT-format checkpoint, merged into the plain denoiser instead of wrapping it with peft.
+    state = merge_peft_state_dict(_read_weights(weights["checkpoint"]), **weights["lora"])
+    model.denoiser.load_state_dict(state, strict=True)
     model.adapter.load_state_dict(_read_weights(weights["adapter_checkpoint"]), strict=True)
     model.eval().requires_grad_(False)
     return model
+
+
+def _load_structure_model(config: dict[str, Any]):
+    structure = edict(config["sparse_structure"])
+    model = get_model_class(structure.model.name)(**structure.model.args)
+    _load_structure_weights(model, structure.weights)
+    return model
+
+
+def _load_shape_decoder_for(stage: str):
+    def load(config: dict[str, Any]):
+        if stage == "texture":
+            return load_shape_decoder(config["texture"]["shape_decoder_checkpoint"], int(config["texture"]["resolution"]))
+        decoder = config[stage]["decoder"]
+        return load_shape_decoder(decoder["checkpoint"], int(decoder["resolution"]))
+    return load
+
+
+def _load_flow_model_for(stage: str):
+    def load(config: dict[str, Any]):
+        spec = edict(config[stage])
+        return _load_flow_model(spec.model, spec.weights)
+    return load
+
+
+# Name -> loader, so a pipeline can build only the models one stage needs.
+MODEL_LOADERS = {
+    "conditioner": lambda config: StructuredLatentConditioner(**config["conditioner"]),
+    "structure_model": _load_structure_model,
+    "structure_decoder": lambda config: load_sparse_structure_decoder(config["sparse_structure"]["decoder"]["checkpoint"]),
+    "shape512_model": _load_flow_model_for("structured_latent_512"),
+    "shape512_decoder": _load_shape_decoder_for("structured_latent_512"),
+    "shape1024_model": _load_flow_model_for("structured_latent_1024"),
+    "shape1024_decoder": _load_shape_decoder_for("texture"),
+    "texture_model": _load_flow_model_for("texture"),
+    "texture_decoder": lambda config: load_texture_decoder(config["texture"]["texture_decoder_checkpoint"]),
+}
+
+
+def load_model(config: dict[str, Any], name: str):
+    return MODEL_LOADERS[name](config)
 
 
 def load_models(
     config: dict[str, Any], *, cache_dir: str | Path | None = None,
     local_files_only: bool = False,
 ) -> dict[str, Any]:
-
-    structure = edict(config["sparse_structure"])
-    shape512 = edict(config["structured_latent_512"])
-    shape1024 = edict(config["structured_latent_1024"])
-    texture = edict(config["texture"])
-
     dino = DinoV3Encoder(
         config["external_models"]["dino"],
         cache_dir=cache_dir, local_files_only=local_files_only,
     ).eval().requires_grad_(False)
-
-    spec = structure.model
-    structure_model = get_model_class(spec.name)(**spec.args)
-    _load_structure_weights(structure_model, structure.weights)
-    structure_decoder = load_sparse_structure_decoder(structure.decoder.checkpoint)
-
-    shape512_model = _load_flow_model(shape512.model, shape512.weights)
-    shape512_decoder = load_shape_decoder(
-        shape512.decoder.checkpoint, int(shape512.decoder.resolution),
-    )
-
-    shape1024_model = _load_flow_model(shape1024.model, shape1024.weights)
-    texture_model = _load_flow_model(texture.model, texture.weights)
-    shape1024_decoder = load_shape_decoder(
-        texture.shape_decoder_checkpoint, int(texture.resolution)
-    )
-    texture_decoder = load_texture_decoder(texture.texture_decoder_checkpoint)
-
-    conditioner = StructuredLatentConditioner(**config["conditioner"])
-    return {
-        "dino": dino,
-        "conditioner": conditioner,
-        "structure_model": structure_model,
-        "structure_decoder": structure_decoder,
-        "shape512_model": shape512_model,
-        "shape512_decoder": shape512_decoder,
-        "shape1024_model": shape1024_model,
-        "shape1024_decoder": shape1024_decoder,
-        "texture_model": texture_model,
-        "texture_decoder": texture_decoder,
-    }
+    return {"dino": dino, **{name: load_model(config, name) for name in MODEL_LOADERS}}

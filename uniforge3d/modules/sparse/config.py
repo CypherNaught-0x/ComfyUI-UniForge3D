@@ -1,8 +1,8 @@
 from typing import Literal
 
-CONV = 'flex_gemm' 
+CONV = 'torch'
 DEBUG = False
-ATTN = 'flash_attn'
+ATTN = 'sdpa'
 
 def __from_env():
     import os
@@ -17,30 +17,32 @@ def __from_env():
     if env_sparse_attn_backend is None:
         env_sparse_attn_backend = os.environ.get('ATTN_BACKEND')
 
-    if env_sparse_conv_backend not in (None, 'flex_gemm'):
+    if env_sparse_conv_backend not in (None, 'torch', 'flex_gemm'):
         raise ValueError(
-            'This RecGen inference package only includes SPARSE_CONV_BACKEND=flex_gemm; '
+            'Supported SPARSE_CONV_BACKEND values are torch and flex_gemm; '
             f'got {env_sparse_conv_backend!r}'
         )
+    if env_sparse_conv_backend is not None:
+        CONV = env_sparse_conv_backend
     if env_sparse_debug is not None:
         DEBUG = env_sparse_debug == '1'
-    if env_sparse_attn_backend is not None and env_sparse_attn_backend in ['xformers', 'flash_attn', 'flash_attn_3']:
+    if env_sparse_attn_backend is not None and env_sparse_attn_backend in ['xformers', 'flash_attn', 'flash_attn_3', 'sdpa']:
         ATTN = env_sparse_attn_backend
 
 
 __from_env()
     
 
-def set_conv_backend(backend: Literal['flex_gemm']):
+def set_conv_backend(backend: Literal['torch', 'flex_gemm']):
     global CONV
-    if backend != 'flex_gemm':
-        raise ValueError('RecGen only includes the flex_gemm sparse-convolution backend')
+    if backend not in ('torch', 'flex_gemm'):
+        raise ValueError('Supported sparse-convolution backends are torch and flex_gemm')
     CONV = backend
 
 def set_debug(debug: bool):
     global DEBUG
     DEBUG = debug
 
-def set_attn_backend(backend: Literal['xformers', 'flash_attn']):
+def set_attn_backend(backend: Literal['xformers', 'flash_attn', 'sdpa']):
     global ATTN
     ATTN = backend

@@ -16,7 +16,12 @@ from .sparse_unet import (
     SparseUnetVaeDecoder,
 )
 from ...representations import Mesh
-from o_voxel.convert import flexible_dual_grid_to_mesh
+from ...compat.comfy_backend import comfy
+
+
+def flexible_dual_grid_to_mesh(*args, **kwargs):
+    # o-voxel replacement: ComfyUI's port of o_voxel.convert.flexible_dual_grid_to_mesh.
+    return comfy().flexible_dual_grid_to_mesh(*args, **kwargs)
 
 
 class FlexiDualGridVaeDecoder(SparseUnetVaeDecoder):

@@ -8,7 +8,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-import cumesh
+from ..compat import cumesh
 import numpy as np
 import torch
 import trimesh
@@ -40,6 +40,7 @@ def official_shape_only_postprocess(
     decimation_target: int,
     remesh_band: float,
     remesh_project: float,
+    drop_inner_shell: bool = False,
 ) -> trimesh.Trimesh:
     """TRELLIS.2 example.py/to_glb geometry path without UV or texture work."""
     mesh = cumesh.CuMesh()
@@ -73,6 +74,7 @@ def official_shape_only_postprocess(
             project_back=remesh_project,
             verbose=False,
             bvh=bvh,
+            drop_inner_shell=drop_inner_shell,
         )
     )
     mesh.simplify(decimation_target, verbose=False)

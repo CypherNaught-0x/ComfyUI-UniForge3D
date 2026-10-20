@@ -5,7 +5,6 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import DINOv3ViTModel
 
 
 class DinoV3Encoder(nn.Module):
@@ -18,6 +17,8 @@ class DinoV3Encoder(nn.Module):
 
     def __init__(self, model_name: str, **download_kwargs):
         super().__init__()
+        from transformers import DINOv3ViTModel
+
         self.model = DINOv3ViTModel.from_pretrained(
             model_name, torch_dtype=torch.float32, **download_kwargs,
         ).eval()
@@ -58,6 +59,45 @@ class DinoV3Encoder(nn.Module):
             hidden = layer(hidden, position_embeddings=position)
         hidden = F.layer_norm(hidden, hidden.shape[-1:])
 
+        if multiview:
+            return hidden.reshape(batch, views, hidden.shape[1], hidden.shape[2]).float()
+        return hidden
+
+
+class ComfyDinoV3Encoder(nn.Module):
+    """The same feature path as :class:`DinoV3Encoder`, run on a ComfyUI DINOv3 ViT-L ClipVision.
+
+    ComfyUI's ``DINOv3ViTModel(skip_norm_elementwise=True)`` is embeddings -> RoPE -> layers ->
+    non-affine LayerNorm, matching the loop above. ComfyUI owns the weights and their placement;
+    this wrapper only loads them onto the compute device before encoding.
+    """
+
+    def __init__(self, clip_vision) -> None:
+        super().__init__()
+        self.clip_vision = clip_vision
+        self.register_buffer("_mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1), persistent=False)
+        self.register_buffer("_std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1), persistent=False)
+
+    @torch.no_grad()
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        import comfy.model_management
+
+        multiview = images.ndim == 5
+        if multiview:
+            batch, views = images.shape[:2]
+            flat = images.flatten(0, 1)
+        elif images.ndim == 4:
+            flat = images
+        else:
+            raise ValueError(f"Expected DINO images [B,3,H,W] or [B,V,3,H,W], got {tuple(images.shape)}")
+        comfy.model_management.load_model_gpu(self.clip_vision.patcher)
+        mean = self._mean.to(device=flat.device, dtype=flat.dtype)
+        std = self._std.to(device=flat.device, dtype=flat.dtype)
+        # One view per call bounds activation memory at 1024px (4101 tokens).
+        hidden = torch.cat([
+            self.clip_vision.model(((view[None] - mean) / std), skip_norm_elementwise=True)[0]
+            for view in flat
+        ])
         if multiview:
             return hidden.reshape(batch, views, hidden.shape[1], hidden.shape[2]).float()
         return hidden

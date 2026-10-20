@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 
 from ..basic import SparseTensor
+from .. import config
+from .full_attn import varlen_sdpa
 from .modules import SparseMultiHeadRMSNorm
 
 try:
@@ -125,7 +127,7 @@ class RoutedFullOnlyFlashCrossAttention(nn.Module):
         self.qk_rms_norm = bool(qk_rms_norm)
         if self.num_heads != 12 or self.head_dim != 128:
             raise ValueError("production Full-only Flash path requires 12 heads x 128")
-        if flash_attn_varlen_func is None:
+        if config.ATTN != 'sdpa' and flash_attn_varlen_func is None:
             raise RuntimeError(
                 "flash_attn_varlen_func is required for routed Full-only attention"
             ) from _FLASH_IMPORT_ERROR
@@ -180,17 +182,25 @@ class RoutedFullOnlyFlashCrossAttention(nn.Module):
 
         k_packed = k.reshape(-1, self.num_heads, self.head_dim)
         v_packed = v.reshape(-1, self.num_heads, self.head_dim)
-        out_grouped = flash_attn_varlen_func(
-            q,
-            k_packed,
-            v_packed,
-            context["routed_cu_seqlens_q"],
-            context["routed_cu_seqlens_k"],
-            int(context["routed_max_seqlen_q"]),
-            self.full_tokens,
-            dropout_p=0.0,
-            softmax_scale=None,
-            causal=False,
-        )
+        if config.ATTN == 'sdpa':
+            cu_q = context["routed_cu_seqlens_q"]
+            out_grouped = varlen_sdpa(
+                q, k_packed, v_packed,
+                (cu_q[1:] - cu_q[:-1]).tolist(),
+                [self.full_tokens] * int(active_groups.numel()),
+            )
+        else:
+            out_grouped = flash_attn_varlen_func(
+                q,
+                k_packed,
+                v_packed,
+                context["routed_cu_seqlens_q"],
+                context["routed_cu_seqlens_k"],
+                int(context["routed_max_seqlen_q"]),
+                self.full_tokens,
+                dropout_p=0.0,
+                softmax_scale=None,
+                causal=False,
+            )
         out = out_grouped[inverse]
         return x.replace(self.to_out(out.reshape(-1, self.channels)))

@@ -1,6 +1,6 @@
 from typing import *
 
-BACKEND = 'flash_attn' 
+BACKEND = 'sdpa'
 DEBUG = False
 
 def __from_env():
@@ -21,7 +21,7 @@ def __from_env():
 __from_env()
     
 
-def set_backend(backend: Literal['xformers', 'flash_attn']):
+def set_backend(backend: Literal['xformers', 'flash_attn', 'sdpa']):
     global BACKEND
     BACKEND = backend
 
