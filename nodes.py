@@ -99,6 +99,10 @@ def _views_to_rgba(images: torch.Tensor, masks: torch.Tensor | None, mask_mode: 
         if mask_mode == MASK_MODES[0]:
             alpha = 1.0 - alpha       # LoadImage's MASK is 1 where the PNG is transparent
         if alpha.shape[:3] != rgb.shape[:3]:
+            if alpha.shape[1:3] == (64, 64) and not alpha.any():
+                raise ValueError("This view has no alpha channel (LoadImage returned an empty 64x64 mask). "
+                                 "Use RGBA images, a background-removal mask with mask_mode 'foreground', "
+                                 "or mask_mode 'none (opaque input)'.")
             raise ValueError(f"Mask {tuple(alpha.shape)} does not match image {tuple(rgb.shape[:3])}")
     return [np.concatenate([rgb[i], alpha[i][..., None]], axis=-1) for i in range(rgb.shape[0])]
 
@@ -199,7 +203,7 @@ class UniForge3DGenerate:
 
         original = pipeline.config
         pipeline.config = config
-        devices = [pipeline.device] if pipeline.device.type == "cuda" else []
+        devices = list(range(torch.cuda.device_count())) if pipeline.device.type == "cuda" else []
         try:
             # The pipeline seeds the global RNGs; restore them so later nodes in this process
             # (e.g. Pixal3D) see the same RNG state as if UniForge3D had not run.

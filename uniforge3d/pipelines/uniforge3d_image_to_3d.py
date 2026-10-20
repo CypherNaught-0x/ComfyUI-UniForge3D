@@ -83,7 +83,9 @@ class UniForge3DImageTo3DPipeline:
 
     def _model(self, name: str) -> torch.nn.Module:
         if name not in self._models:
-            with torch.device("cpu"):
+            # Upstream builds every model before seeding. Building lazily, after torch.manual_seed,
+            # would let the (overwritten) random weight init consume the seeded noise stream.
+            with torch.random.fork_rng(devices=[]), torch.device("cpu"):
                 self._models[name] = load_stage_model(self.config, name)
         return self._models[name]
 

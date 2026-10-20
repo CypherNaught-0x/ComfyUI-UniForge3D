@@ -17,8 +17,11 @@ The target was a Radeon 8060S (Strix Halo APU, gfx1151) with PyTorch 2.13.0 + RO
 | DINOv3 (gated HF repo) | image features | ComfyUI's DINOv3 ViT-L (`dino_v3_L_naf_fp32`), the one TRELLIS.2/Pixal3D already use | n/a |
 | BRIA RMBG-2.0 | background removal | bring your own masks (RGBA, or any ComfyUI background-removal node) | n/a |
 
-When `flex_gemm` and/or `cumesh` can be imported, they are used automatically. Set `UNIFORGE3D_NATIVE_EXT=0` to force
-the pure-PyTorch path, or `=1` to make a missing extension an error.
+The native `flex_gemm` / `cumesh` builds are **opt-in**:
+
+- `UNIFORGE3D_NATIVE_EXT=auto` uses whichever of them can be imported.
+- `UNIFORGE3D_NATIVE_EXT=1` requires both.
+- The default is the pure-PyTorch path.
 
 ## Correctness checks (`tests/test_compat.py`, all on GPU)
 
@@ -78,6 +81,18 @@ After that, the code-level results were:
 | CuMesh simplify 327k → 50k faces | 941 ms | 180 ms | 50.0k vs 46.7k faces |
 | CuMesh remesh, resolution 512 | 1380 ms | 314 ms | identical face count |
 
+The per-op wins do not carry over to the whole pipeline. These are textured runs on `case01`:
+
+| Path | Total | Structure | Shape 512 | Shape 1024 | PBR texture |
+|---|---|---|---|---|---|
+| Pure PyTorch (default) | **450 s** | 51 s | 66 s | 140 s | 191 s |
+| Native, cold (Triton autotune) | 544 s | 47 s | 76 s | 153 s | 264 s |
+| Native, warm (autotune cached) | 459 s | 48 s | 52 s | 153 s | 202 s |
+
+Time goes to the DiT samplers (dense GEMMs and attention), which no extension touches. On the native path, the texture
+stage also runs CuMesh's xatlas UV packing on the CPU. The point of the native builds is therefore exact upstream
+mesh processing, not speed.
+
 ## Coexistence with TRELLIS.2 / Pixal3D
 
 The node pack patches nothing in ComfyUI or in other packs. It adds 3 nodes and imports only as a nested package, so no
@@ -91,9 +106,12 @@ That reproducibility exposed one interaction. UniForge3D seeds the global torch 
 global RNG state. So running UniForge3D before Pixal3D in the same process changed Pixal3D's output. The node now runs
 inside `torch.random.fork_rng`, which leaves the caller's RNG state untouched.
 
-The tests were run on throwaway ComfyUI servers using the production image, models and custom-node set:
+All checks ran on throwaway ComfyUI servers using the production image, models and custom-node set, each with private
+input and output directories.
 
-- the TRELLIS.2 512 and Pixal3D 512 workflows with the pack loaded and after a UniForge3D run
-- compared against two runs without the pack
-
-The results are in the README.
+- **Startup:** the pack adds exactly its 3 nodes (1546 → 1549). All 10 TRELLIS.2/Pixal3D nodes are present, and the
+  import-failure list is unchanged.
+- **Raw meshes:** these are the reproducible outputs. Sequence: UniForge3D, then TRELLIS.2 512, then Pixal3D 512, in one
+  process. Both raw GLBs are **byte-identical** to the runs without the pack. Before the `fork_rng` fix, Pixal3D's
+  differed.
+- **Run time:** TRELLIS.2 512 took 50–55 s and Pixal3D 512 took 55 s, with or without the pack.

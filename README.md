@@ -61,6 +61,21 @@ These are from upstream example `case01` (4 views) at the default settings: seed
 Times include loading each stage's weights from NVMe. `keep_models_in_ram` keeps the about 31 GB of stage weights in
 system RAM between runs.
 
+## Coexistence with TRELLIS.2 / Pixal3D
+
+The pack patches nothing in ComfyUI or in other node packs. It only adds nodes, and it restores the global RNG state after
+each run. This was tested in one server process: UniForge3D, then TRELLIS.2 512, then Pixal3D 512. The raw meshes from
+TRELLIS.2 and Pixal3D were byte-identical to runs without the pack. Details are in [docs/AMD_PORT.md](docs/AMD_PORT.md).
+
+## Optional native extensions
+
+FlexGEMM builds for ROCm unmodified, and CuMesh builds with `patches/cumesh-hip.patch`.
+`scripts/build_native_rocm.sh <out_dir> gfx1151` builds wheels for both. Set `UNIFORGE3D_NATIVE_EXT=auto` to use them.
+
+Per op they are 4–17× faster. End to end they are not faster: 459 s warm against 450 s, because DiT sampling dominates.
+Their value is mesh processing that matches upstream exactly. nvdiffrast does not build. It would need a real port, and it
+is not needed here.
+
 ## Differences from upstream
 
 - **UV unwrapping** uses ComfyUI's chart segmentation, parameterization and packing instead of CuMesh's

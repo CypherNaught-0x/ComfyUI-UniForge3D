@@ -113,8 +113,11 @@ class CuMesh:
         """Return (vertices, faces, uvs[, vmaps]); seam vertices are duplicated as in CuMesh."""
         if native.cumesh() is not None:
             mesh = _native_mesh(self.vertices, self.faces)
-            return mesh.uv_unwrap(compute_charts_kwargs=dict(compute_charts_kwargs or {}),
-                                  return_vmaps=return_vmaps, verbose=verbose)
+            out = mesh.uv_unwrap(compute_charts_kwargs=dict(compute_charts_kwargs or {}),
+                                 return_vmaps=return_vmaps, verbose=verbose)
+            # uv_unwrap drops degenerate faces and renumbers vertices; vmaps index the result.
+            self._set(*mesh.read())
+            return out
         vmapping, indices, uvs = comfy().uv_unwrap(
             self.vertices, self.faces.long(), "pec", int(uv_resolution), int(padding), 0.0,
         )
