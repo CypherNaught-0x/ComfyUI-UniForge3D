@@ -117,6 +117,7 @@ def remesh_and_bake_texture(
     mesh_config: dict[str, Any],
     mesh,
     pbr_voxel: SparseTensor,
+    drop_inner_shell: bool = False,
 ) -> trimesh.Trimesh:
     """Use the raw decoded surface and the official example's export settings."""
     mesh.simplify(int(mesh_config["pre_simplify_target"]))
@@ -139,4 +140,5 @@ def remesh_and_bake_texture(
         remesh_band=float(mesh_config["remesh_band"]),
         remesh_project=float(mesh_config["remesh_project"]),
         verbose=True,
+        drop_inner_shell=drop_inner_shell,
     )

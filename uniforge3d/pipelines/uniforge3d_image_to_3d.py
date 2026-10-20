@@ -12,7 +12,7 @@ import trimesh
 from huggingface_hub import snapshot_download
 
 from ..models.dino import DinoV3Encoder
-from ..models.loaders import load_model, resolve_checkpoint
+from ..models.loaders import load_stage_model, resolve_checkpoint
 from ..utils.device import release_cuda
 from ..utils.mesh import (
     display_to_model,
@@ -84,7 +84,7 @@ class UniForge3DImageTo3DPipeline:
     def _model(self, name: str) -> torch.nn.Module:
         if name not in self._models:
             with torch.device("cpu"):
-                self._models[name] = load_model(self.config, name)
+                self._models[name] = load_stage_model(self.config, name)
         return self._models[name]
 
     def _reserve(self, stage: str) -> None:

@@ -1,0 +1,112 @@
+{
+ "1": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "uniforge3d/001.png"
+  }
+ },
+ "2": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "uniforge3d/002.png"
+  }
+ },
+ "3": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "uniforge3d/003.png"
+  }
+ },
+ "4": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "uniforge3d/004.png"
+  }
+ },
+ "5": {
+  "class_type": "UniForge3DViews",
+  "inputs": {
+   "mask_mode": "inverted (LoadImage alpha)",
+   "image_1": [
+    "1",
+    0
+   ],
+   "image_2": [
+    "2",
+    0
+   ],
+   "image_3": [
+    "3",
+    0
+   ],
+   "image_4": [
+    "4",
+    0
+   ],
+   "mask_1": [
+    "1",
+    1
+   ],
+   "mask_2": [
+    "2",
+    1
+   ],
+   "mask_3": [
+    "3",
+    1
+   ],
+   "mask_4": [
+    "4",
+    1
+   ]
+  }
+ },
+ "6": {
+  "class_type": "CLIPVisionLoader",
+  "inputs": {
+   "clip_name": "dino_v3_L_naf_fp32.safetensors"
+  }
+ },
+ "7": {
+  "class_type": "UniForge3DLoader",
+  "inputs": {
+   "model": "UniForge3D",
+   "keep_models_in_ram": false,
+   "clip_vision": [
+    "6",
+    0
+   ]
+  }
+ },
+ "8": {
+  "class_type": "UniForge3DGenerate",
+  "inputs": {
+   "output": "textured",
+   "seed": 42,
+   "texture_size": 2048,
+   "decimation_target": 1000000,
+   "structure_steps": 0,
+   "shape_steps": 0,
+   "texture_steps": 0,
+   "drop_inner_shell": false,
+   "pipeline": [
+    "7",
+    0
+   ],
+   "views": [
+    "5",
+    0
+   ]
+  }
+ },
+ "9": {
+  "class_type": "SaveGLB",
+  "inputs": {
+   "filename_prefix": "3d/uniforge3d",
+   "mesh": [
+    "8",
+    0
+   ]
+  }
+ }
+}

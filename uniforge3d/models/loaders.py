@@ -193,7 +193,7 @@ MODEL_LOADERS = {
 }
 
 
-def load_model(config: dict[str, Any], name: str):
+def load_stage_model(config: dict[str, Any], name: str):
     return MODEL_LOADERS[name](config)
 
 
@@ -205,4 +205,4 @@ def load_models(
         config["external_models"]["dino"],
         cache_dir=cache_dir, local_files_only=local_files_only,
     ).eval().requires_grad_(False)
-    return {"dino": dino, **{name: load_model(config, name) for name in MODEL_LOADERS}}
+    return {"dino": dino, **{name: load_stage_model(config, name) for name in MODEL_LOADERS}}

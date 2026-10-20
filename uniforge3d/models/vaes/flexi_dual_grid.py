@@ -19,8 +19,11 @@ from ...representations import Mesh
 from ...compat.comfy_backend import comfy
 
 
-def flexible_dual_grid_to_mesh(*args, **kwargs):
-    # o-voxel replacement: ComfyUI's port of o_voxel.convert.flexible_dual_grid_to_mesh.
+def flexible_dual_grid_to_mesh(*args, train: bool = False, **kwargs):
+    # o-voxel replacement: ComfyUI's port of o_voxel.convert.flexible_dual_grid_to_mesh,
+    # which implements the inference (train=False) quad split only.
+    if train:
+        raise NotImplementedError("flexible_dual_grid_to_mesh(train=True) is training-only and not ported")
     return comfy().flexible_dual_grid_to_mesh(*args, **kwargs)
 
 
